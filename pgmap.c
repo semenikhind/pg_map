@@ -23,9 +23,10 @@
 PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(pgmap);
+PG_FUNCTION_INFO_V1(intadd2);
 
-Datum pgmap(PG_FUNCTION_ARGS)
-
+Datum
+pgmap(PG_FUNCTION_ARGS)
 {
 	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
 	Oid retType = PG_GETARG_OID(0);
@@ -205,4 +206,11 @@ Datum pgmap(PG_FUNCTION_ARGS)
 	pfree(nulls);
 
 	PG_RETURN_ARRAYTYPE_P(result);
+}
+
+Datum
+intadd2(PG_FUNCTION_ARGS)
+{
+	int result = PG_GETARG_INT32(0);
+	PG_RETURN_INT32(result + 2);
 }
