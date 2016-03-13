@@ -3,7 +3,7 @@
 
 #include <ctype.h>
 #ifdef _MSC_VER
-#include <float.h>				/* for _isnan */
+#include <float.h>	
 #endif
 #include <math.h>
 
@@ -28,10 +28,12 @@ PG_FUNCTION_INFO_V1(array_OidFunctionCall1);
 
 Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 
-//FunctionCallInfo fcinfo, Oid retType, ArrayMapState *amstate
 {
-	FunctionCallInfo fcinfo;
+	FmgrInfo *finfo;
 	Oid retType = PG_GETARG_OID(1);
+	DirectFunctionCall2(fmgr_info,
+						ObjectIdGetDatum(retType),
+						PointerGetDatum(finfo));
 	ArrayMapState *amstate = PG_GETARG_ARRAYTYPE_P(2);
 
 	AnyArrayType *v;
