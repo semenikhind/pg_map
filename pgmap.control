@@ -1,0 +1,5 @@
+#pgmap extension
+comment = 'pgmap - PostgreSQL map'
+default_version = '1.0'
+module_pathname = '$libdir/pgmap'
+relocatable = true

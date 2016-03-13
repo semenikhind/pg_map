@@ -2,9 +2,7 @@
 #include "funcapi.h"
 
 #include <ctype.h>
-#ifdef _MSC_VER
 #include <float.h>
-#endif
 #include <math.h>
 
 #include "access/htup_details.h"
@@ -24,9 +22,9 @@
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(array_OidFunctionCall1);
+PG_FUNCTION_INFO_V1(pgmap);
 
-Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
+Datum pgmap(PG_FUNCTION_ARGS)
 
 {
 	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
@@ -61,7 +59,7 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 		elog(ERROR, "invalid nargs: %d", fcinfo->nargs);
 	if (PG_ARGISNULL(0))
 		elog(ERROR, "null input array");
-	v = PG_GETARG_ANY_ARRAY(0);
+	v = PG_GETARG_ANY_ARRAY(1);
 
 	inpType = AARR_ELEMTYPE(v);
 	ndim = AARR_NDIM(v);
@@ -184,9 +182,14 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	result->xpn.ndims = ndim;
 	result->flt.dataoffset = dataoffset;
 	result->flt.elemtype = retType;
-	memcpy(ARR_DIMS(result), AARR_DIMS(v), ndim * sizeof(int));
-	memcpy(ARR_LBOUND(result), AARR_LBOUND(v), ndim * sizeof(int));
-
+//	memcpy(ARR_DIMS(result), AARR_DIMS(v), ndim * sizeof(int));
+//	result = (AnyArrayType *) DatumGetPointer(DirectFunctionCall2(array_cat,
+//						PointerGetDatum(result),
+//						PointerGetDatum(AARR)));
+//	memcpy(ARR_LBOUND(result), AARR_LBOUND(v), ndim * sizeof(int));
+//	result = (AnyArrayType *) DatumGetPointer(DirectFunctionCall2(array_cat,
+//						PointerGetDatum(result),
+//						PointerGetDatum(values)));
 	/*
 	 * Note: do not risk trying to pfree the results of the called function
 	 */
