@@ -1,0 +1,5 @@
+#array_OidFunc extension
+comment = 'array_OidFunc - array_OidFunctionCall1(Oid functionId, AnyArrayType array) returns AnyArrayType of functionId for all items in array'
+default_version = '1.0'
+module_pathname = '$libdir/array_OidFunc'
+relocatable = true
