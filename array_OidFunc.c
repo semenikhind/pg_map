@@ -32,10 +32,10 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
 	Oid retType = PG_GETARG_OID(0);
 	fmgr_info(retType, finfo);
-	AnyArrayType *amstate = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	AnyArrayType *amstate = PG_GETARG_ANY_ARRAY(1);
 
 	AnyArrayType *v;
-	ArrayType  *result;
+	AnyArrayType *result;
 	Datum	   *values;
 	bool	   *nulls;
 	int		   *dim;
@@ -179,11 +179,11 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 		dataoffset = 0;			/* marker for no null bitmap */
 		nbytes += ARR_OVERHEAD_NONULLS(ndim);
 	}
-	result = (ArrayType *) palloc0(nbytes);
+	result = (AnyArrayType *) palloc0(nbytes);
 	SET_VARSIZE(result, nbytes);
-	result->ndim = ndim;
-	result->dataoffset = dataoffset;
-	result->elemtype = retType;
+	result->xpn.ndims = ndim;
+	result->flt.dataoffset = dataoffset;
+	result->flt.elemtype = retType;
 	memcpy(ARR_DIMS(result), AARR_DIMS(v), ndim * sizeof(int));
 	memcpy(ARR_LBOUND(result), AARR_LBOUND(v), ndim * sizeof(int));
 
