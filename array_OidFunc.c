@@ -32,7 +32,7 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
 	Oid retType = PG_GETARG_OID(0);
 	fmgr_info(retType, finfo);
-	AnyArrayType *amstate = PG_GETARG_ANY_ARRAY(1);
+	AnyArrayType *amstate = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
 
 	AnyArrayType *v;
 	AnyArrayType *result;
