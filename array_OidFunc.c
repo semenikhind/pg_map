@@ -3,7 +3,7 @@
 
 #include <ctype.h>
 #ifdef _MSC_VER
-#include <float.h>	
+#include <float.h>
 #endif
 #include <math.h>
 
@@ -29,12 +29,10 @@ PG_FUNCTION_INFO_V1(array_OidFunctionCall1);
 Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 
 {
-	FmgrInfo *finfo;
-	Oid retType = PG_GETARG_OID(1);
-	DirectFunctionCall2(fmgr_info,
-						ObjectIdGetDatum(retType),
-						PointerGetDatum(finfo));
-	ArrayMapState *amstate = PG_GETARG_ARRAYTYPE_P(2);
+	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
+	Oid retType = PG_GETARG_OID(0);
+	fmgr_info(retType, finfo);
+	AnyArrayType *amstate = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
 
 	AnyArrayType *v;
 	ArrayType  *result;
@@ -55,8 +53,8 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	bool		typbyval;
 	char		typalign;
 	array_iter	iter;
-	ArrayMetaState *inp_extra;
-	ArrayMetaState *ret_extra;
+	AnyArrayType *arrayType;
+	AnyArrayType *expandedArrayHeader;
 
 	/* Get input array */
 	if (fcinfo->nargs < 1)
@@ -82,32 +80,32 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	 * once per series of calls, assuming the element type doesn't change
 	 * underneath us.
 	 */
-	inp_extra = &amstate->inp_extra;
-	ret_extra = &amstate->ret_extra;
+	arrayType = &amstate->flt;
+	expandedArrayHeader = &amstate->xpn;
 
-	if (inp_extra->element_type != inpType)
+	if (arrayType->flt.elemtype != inpType)
 	{
 		get_typlenbyvalalign(inpType,
-							 &inp_extra->typlen,
-							 &inp_extra->typbyval,
-							 &inp_extra->typalign);
-		inp_extra->element_type = inpType;
+							 &arrayType->xpn.typlen,
+							 &arrayType->xpn.typbyval,
+							 &arrayType->xpn.typalign);
+		arrayType->flt.elemtype = inpType;
 	}
-	inp_typlen = inp_extra->typlen;
-	inp_typbyval = inp_extra->typbyval;
-	inp_typalign = inp_extra->typalign;
+	inp_typlen = arrayType->xpn.typlen;
+	inp_typbyval = arrayType->xpn.typbyval;
+	inp_typalign = arrayType->xpn.typalign;
 
-	if (ret_extra->element_type != retType)
+	if (expandedArrayHeader->flt.elemtype != retType)
 	{
 		get_typlenbyvalalign(retType,
-							 &ret_extra->typlen,
-							 &ret_extra->typbyval,
-							 &ret_extra->typalign);
-		ret_extra->element_type = retType;
+							 &expandedArrayHeader->xpn.typlen,
+							 &expandedArrayHeader->xpn.typbyval,
+							 &expandedArrayHeader->xpn.typalign);
+		expandedArrayHeader->flt.elemtype = retType;
 	}
-	typlen = ret_extra->typlen;
-	typbyval = ret_extra->typbyval;
-	typalign = ret_extra->typalign;
+	typlen = expandedArrayHeader->xpn.typlen;
+	typbyval = expandedArrayHeader->xpn.typbyval;
+	typalign = expandedArrayHeader->xpn.typalign;
 
 	/* Allocate temporary arrays for new values */
 	values = (Datum *) palloc(nitems * sizeof(Datum));

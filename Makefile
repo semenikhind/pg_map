@@ -1,4 +1,4 @@
-# contrib/array_OidFunc/Makefile
+# contrib/abc/Makefile
 
 MODULE_big	= array_OidFunc
 OBJS		= array_OidFunc.o $(WIN32RES)
