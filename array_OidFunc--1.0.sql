@@ -4,6 +4,6 @@
 \echo Use "CREATE EXTENSION array_OidFunc" to load this file. \quit
 
 CREATE FUNCTION array_OidFunctionCall1(oid, anyarray)
-RETURNS aniarray
+RETURNS anyarray
 AS 'MODULE_PATHNAME', 'array_OidFunc'
 LANGUAGE C IMMUTABLE STRICT;
