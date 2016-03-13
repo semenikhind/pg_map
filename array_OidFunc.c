@@ -80,8 +80,8 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	 * once per series of calls, assuming the element type doesn't change
 	 * underneath us.
 	 */
-	arrayType = &amstate->flt;
-	expandedArrayHeader = &amstate->xpn;
+	arrayType = amstate;
+	expandedArrayHeader = amstate;
 
 	if (arrayType->flt.elemtype != inpType)
 	{
