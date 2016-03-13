@@ -190,11 +190,14 @@ Datum array_OidFunctionCall1(PG_FUNCTION_ARGS)
 	/*
 	 * Note: do not risk trying to pfree the results of the called function
 	 */
-	CopyArrayEls(result,
-				 values, nulls, nitems,
-				 typlen, typbyval, typalign,
-				 false);
+//	CopyArrayEls(result,
+//				 values, nulls, nitems,
+//				 typlen, typbyval, typalign,
+//				 false);
 
+	result = (AnyArrayType *) DatumGetPointer(DirectFunctionCall2(array_cat,
+						PointerGetDatum(result),
+						PointerGetDatum(values)));
 	pfree(values);
 	pfree(nulls);
 
