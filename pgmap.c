@@ -1,5 +1,6 @@
 #include "postgres.h"
 #include "funcapi.h"
+#include "c.h"
 
 #include <ctype.h>
 #include <float.h>
