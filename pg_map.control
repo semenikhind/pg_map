@@ -1,0 +1,5 @@
+#pgmap extension
+comment = 'pg_map - Python-like map'
+default_version = '1.0'
+module_pathname = '$libdir/pg_map'
+relocatable = true

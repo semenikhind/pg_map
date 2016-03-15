@@ -12,11 +12,10 @@
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(pgmap);
-PG_FUNCTION_INFO_V1(intadd2);
+PG_FUNCTION_INFO_V1(pg_map);
 
 Datum
-pgmap(PG_FUNCTION_ARGS)
+pg_map(PG_FUNCTION_ARGS)
 {
 	HeapTuple  tp;
 	Oid procId = PG_GETARG_OID(0);
@@ -48,11 +47,4 @@ pgmap(PG_FUNCTION_ARGS)
 	return array_map(&locfcinfo, get_func_rettype(procId), amstate);
 
 	PG_RETURN_ARRAYTYPE_P(array);
-}
-
-Datum
-intadd2(PG_FUNCTION_ARGS)
-{
-	int result = PG_GETARG_INT32(0);
-	PG_RETURN_INT32(result + 2);
 }
