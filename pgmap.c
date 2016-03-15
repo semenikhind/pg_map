@@ -1,6 +1,9 @@
 #include "postgres.h"
 #include "funcapi.h"
 
+#include "catalog/pg_type.h"
+#include "access/htup_details.h"
+#include "utils/syscache.h"
 #include "utils/array.h"
 
 #include <string.h>
@@ -14,19 +17,32 @@ PG_FUNCTION_INFO_V1(intadd2);
 Datum
 pgmap(PG_FUNCTION_ARGS)
 {
-	FmgrInfo *finfo = (FmgrInfo *) palloc(sizeof(FmgrInfo));
-	Oid retType = PG_GETARG_OID(0);
+	HeapTuple  tp;
+	Oid procId = PG_GETARG_OID(0);
 	AnyArrayType *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
-	ArrayMapState *amstate = (ArrayMapState *) array;
 
-	fmgr_info(retType, finfo);
+	ArrayCoerceExprState *astate = (ArrayCoerceExprState *) palloc(sizeof(ArrayCoerceExprState));
+	FunctionCallInfoData *locfcinfo = (FunctionCallInfoData *) palloc(sizeof(FunctionCallInfoData));
 
-	AnyArrayType *result = (DatumGetAnyArray(DirectFunctionCall3((AnyArrayType *)array_map,
-											   PointerGetDatum(fcinfo),
-											   ObjectIdGetDatum(amstate->inp_extra.element_type),
-											   PointerGetDatum(amstate))));
+	fmgr_info(procId, locfcinfo->flinfo);
 
-	PG_RETURN_ARRAYTYPE_P(result);
+	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(astate->resultelemtype));
+	if (HeapTupleIsValid(tp))
+	{
+		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(tp);
+		locfcinfo->arg[1] = Int32GetDatum(PointerGetDatum(typtup));
+	}
+	ReleaseSysCache(tp);
+
+	locfcinfo->arg[0] = PointerGetDatum(array);
+//	locfcinfo.arg[1] = Int32GetDatum(typtup);
+	locfcinfo->argnull[0] = false;
+	locfcinfo->argnull[1] = false;
+	locfcinfo->argnull[2] = false;
+
+	return array_map(locfcinfo, astate->resultelemtype, astate->amstate);
+
+	PG_RETURN_ARRAYTYPE_P(array);
 }
 
 Datum
