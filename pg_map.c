@@ -17,26 +17,27 @@ PG_FUNCTION_INFO_V1(pg_map);
 Datum
 pg_map(PG_FUNCTION_ARGS)
 {
-	HeapTuple  tp;
-	Oid procId = PG_GETARG_OID(0);
-	AnyArrayType *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	HeapTuple		  		htup;
+	Oid 					procId = PG_GETARG_OID(0);
+	AnyArrayType		   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	ArrayMapState  		   *amstate;
+	FunctionCallInfoData	locfcinfo;
+	FmgrInfo				funcinfo;
 
-	ArrayMapState *amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
-	FunctionCallInfoData locfcinfo;
-
-	FmgrInfo funcinfo;
 	fmgr_info(procId, &funcinfo);
+
+	amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
 
 	InitFunctionCallInfoData(locfcinfo, &funcinfo, 3,
 							 InvalidOid, NULL, NULL);
 
-	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
-	if (HeapTupleIsValid(tp))
+	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
+	if (HeapTupleIsValid(htup))
 	{
-		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(tp);
+		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(htup);
 		locfcinfo.arg[1] = Int32GetDatum(PointerGetDatum(typtup->typtypmod));
 	}
-	ReleaseSysCache(tp);
+	ReleaseSysCache(htup);
 
 	locfcinfo.arg[0] = PointerGetDatum(array);
 	locfcinfo.arg[2] = BoolGetDatum(0);
