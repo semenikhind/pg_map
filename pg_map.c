@@ -6,24 +6,40 @@
 #include "access/htup_details.h"
 #include "utils/syscache.h"
 #include "utils/array.h"
+#include "utils/builtins.h"
 
 #include <string.h>
 #include <stdio.h>
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(pg_map);
+PG_FUNCTION_INFO_V1(pg_oid_map);
+PG_FUNCTION_INFO_V1(pg_procname_map);
 
 AnyArrayType *anyarray_map(Oid, AnyArrayType *);
 
 Datum
-pg_map(PG_FUNCTION_ARGS)
+pg_oid_map(PG_FUNCTION_ARGS)
 {
+	Oid 			procId = PG_GETARG_OID(0);
+	AnyArrayType   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	AnyArrayType   *result;
 
-	Oid 					procId = PG_GETARG_OID(0);
-	AnyArrayType		   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
-	AnyArrayType		   *result;
+	result = anyarray_map(procId, array);
 
+	PG_RETURN_ARRAYTYPE_P(result);
+}
+
+Datum
+pg_procname_map(PG_FUNCTION_ARGS)
+{
+	char		   *pro_name = PG_GETARG_CSTRING(0);
+	AnyArrayType   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	Oid 			procId;
+	AnyArrayType   *result;
+
+	procId = DatumGetObjectId(DirectFunctionCall1(to_regprocedure,
+												  CStringGetDatum(pro_name)));
 	result = anyarray_map(procId, array);
 
 	PG_RETURN_ARRAYTYPE_P(result);
