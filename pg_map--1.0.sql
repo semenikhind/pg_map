@@ -8,7 +8,7 @@ RETURNS anyarray
 AS 'MODULE_PATHNAME', 'pg_oid_map'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION pg_map(cstring, anyarray)
+CREATE FUNCTION pg_map(text, anyarray)
 RETURNS anyarray
 AS 'MODULE_PATHNAME', 'pg_procname_map'
 LANGUAGE C IMMUTABLE STRICT;

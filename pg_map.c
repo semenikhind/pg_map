@@ -22,7 +22,7 @@ Datum
 pg_oid_map(PG_FUNCTION_ARGS)
 {
 	Oid 			procId = PG_GETARG_OID(0);
-	AnyArrayType   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	AnyArrayType   *array = PG_GETARG_ANY_ARRAY(1);
 	AnyArrayType   *result;
 
 	result = anyarray_map(procId, array);
@@ -33,13 +33,13 @@ pg_oid_map(PG_FUNCTION_ARGS)
 Datum
 pg_procname_map(PG_FUNCTION_ARGS)
 {
-	char		   *pro_name = PG_GETARG_CSTRING(0);
-	AnyArrayType   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
+	text		   *pro_name = PG_GETARG_TEXT_PP(0);
+	AnyArrayType   *array = PG_GETARG_ANY_ARRAY(1);
 	Oid 			procId;
 	AnyArrayType   *result;
 
 	procId = DatumGetObjectId(DirectFunctionCall1(to_regprocedure,
-												  CStringGetDatum(pro_name)));
+												  PointerGetDatum(pro_name)));
 	result = anyarray_map(procId, array);
 
 	PG_RETURN_ARRAYTYPE_P(result);
