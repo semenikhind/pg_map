@@ -17,12 +17,13 @@ PG_FUNCTION_INFO_V1(pg_map);
 Datum
 pg_map(PG_FUNCTION_ARGS)
 {
-	HeapTuple		  		htup;
+	HeapTuple				htup;
 	Oid 					procId = PG_GETARG_OID(0);
 	AnyArrayType		   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
-	ArrayMapState  		   *amstate;
+	ArrayMapState		   *amstate;
 	FunctionCallInfoData	locfcinfo;
 	FmgrInfo				funcinfo;
+	AnyArrayType		   *result;
 
 	fmgr_info(procId, &funcinfo);
 
@@ -45,7 +46,7 @@ pg_map(PG_FUNCTION_ARGS)
 	locfcinfo.argnull[1] = false;
 	locfcinfo.argnull[2] = false;
 
-	return array_map(&locfcinfo, get_func_rettype(procId), amstate);
+	result = DatumGetAnyArray(array_map(&locfcinfo, get_func_rettype(procId), amstate));
 
-	PG_RETURN_ARRAYTYPE_P(array);
+	PG_RETURN_ARRAYTYPE_P(result);
 }
