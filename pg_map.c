@@ -14,19 +14,29 @@ PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(pg_map);
 
+AnyArrayType *anyarray_map(Oid, AnyArrayType *);
+
 Datum
 pg_map(PG_FUNCTION_ARGS)
 {
-	HeapTuple				htup;
+
 	Oid 					procId = PG_GETARG_OID(0);
 	AnyArrayType		   *array = (AnyArrayType *)PG_GETARG_ANY_ARRAY(1);
-	ArrayMapState		   *amstate;
-	FunctionCallInfoData	locfcinfo;
-	FmgrInfo				funcinfo;
 	AnyArrayType		   *result;
 
-	fmgr_info(procId, &funcinfo);
+	result = anyarray_map(procId, array);
 
+	PG_RETURN_ARRAYTYPE_P(result);
+}
+
+AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array)
+{
+	FmgrInfo				funcinfo;
+	FunctionCallInfoData	locfcinfo;
+	ArrayMapState		   *amstate;
+	HeapTuple				htup;
+
+	fmgr_info(procId, &funcinfo);
 	amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
 
 	InitFunctionCallInfoData(locfcinfo, &funcinfo, 3,
@@ -46,7 +56,5 @@ pg_map(PG_FUNCTION_ARGS)
 	locfcinfo.argnull[1] = false;
 	locfcinfo.argnull[2] = false;
 
-	result = DatumGetAnyArray(array_map(&locfcinfo, get_func_rettype(procId), amstate));
-
-	PG_RETURN_ARRAYTYPE_P(result);
+	return DatumGetAnyArray(array_map(&locfcinfo, get_func_rettype(procId), amstate));
 }
