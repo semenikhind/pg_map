@@ -3,10 +3,14 @@
 
 #include "utils/lsyscache.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_cast.h"
+#include "catalog/pg_proc.h"
 #include "access/htup_details.h"
 #include "utils/syscache.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/rel.h"
+#include "utils/tqual.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -17,6 +21,7 @@ PG_FUNCTION_INFO_V1(pg_oid_map);
 PG_FUNCTION_INFO_V1(pg_procname_map);
 
 AnyArrayType *anyarray_map(Oid, AnyArrayType *);
+AnyArrayType *cast_array(Oid, AnyArrayType *);
 
 Datum
 pg_oid_map(PG_FUNCTION_ARGS)
@@ -52,6 +57,26 @@ AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array)
 	ArrayMapState		   *amstate;
 	HeapTuple				htup;
 
+/*
+
+    oidvector				oidArray;
+	Oid						arg = 100;
+
+	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
+	if (HeapTupleIsValid(htup))
+	{
+		Form_pg_proc proctup = (Form_pg_proc) GETSTRUCT(htup);
+		oidArray.values[0] = proctup->proargtypes.values[0];
+		arg = oidArray.values[0];
+	}
+	ReleaseSysCache(htup);
+
+//	array = cast_array(procId, array);
+	if (AARR_ELEMTYPE(array) != arg)
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				errmsg("invalid oid , %d, %d", AARR_ELEMTYPE(array), arg)));
+*/
 	fmgr_info(procId, &funcinfo);
 	amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
 
@@ -73,4 +98,56 @@ AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array)
 	locfcinfo.argnull[2] = false;
 
 	return DatumGetAnyArray(array_map(&locfcinfo, get_func_rettype(procId), amstate));
+}
+
+AnyArrayType *cast_array(Oid procId, AnyArrayType *array)
+{
+	Oid						castsrc;
+	Oid						casttrg;
+	Oid						castfc;
+	Relation				cast_heap;
+	HeapScanDesc			heapScan;
+	Datum					values[Natts_pg_cast];
+	bool					nulls[Natts_pg_cast];
+	HeapTuple				tuple;
+	AnyArrayType		   *result;
+	bool					verification;
+	HeapTuple				htup;
+	Oid						arg = 0;
+
+	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
+	if (HeapTupleIsValid(htup))
+	{
+		Form_pg_proc proctup = (Form_pg_proc) GETSTRUCT(htup);
+		arg = ObjectIdGetDatum(ObjectIdGetDatum(proctup->proargtypes.values[0]));
+	}
+	ReleaseSysCache(htup);
+
+	result = (AnyArrayType *) palloc(sizeof(AnyArrayType));
+	if (AARR_ELEMTYPE(array) != arg)
+	{
+		verification = true;
+		cast_heap = heap_open(CastRelationId, AccessShareLock);
+		heapScan = heap_beginscan(cast_heap, SnapshotSelf, 0, (ScanKey) NULL);
+
+		while(HeapTupleIsValid(tuple = heap_getnext(heapScan, ForwardScanDirection)) && verification)
+		{
+			heap_deform_tuple(tuple, cast_heap->rd_att, values, nulls);
+			castsrc = DatumGetObjectId(values[0]);
+			if (castsrc == AARR_ELEMTYPE(array))
+			{
+				casttrg = DatumGetObjectId(values[1]);
+				castfc = DatumGetObjectId(values[2]);
+				if ((casttrg == arg) || (castfc != 0))
+				{
+					result = anyarray_map(castfc, array);
+					verification = false;
+				}
+			}
+		}
+
+		heap_endscan(heapScan);
+		heap_close(cast_heap, AccessShareLock);
+	}
+	return result;
 }
