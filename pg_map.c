@@ -11,6 +11,7 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/tqual.h"
+#include "utils/fmgroids.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -20,8 +21,10 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(pg_oid_map);
 PG_FUNCTION_INFO_V1(pg_procname_map);
 
-AnyArrayType *anyarray_map(Oid, AnyArrayType *);
-AnyArrayType *cast_array(Oid, AnyArrayType *);
+static AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array);
+static Oid get_cast_proc(Oid src, Oid dst);
+static Oid get_proc_arg_oid(Oid procId);
+static int32 get_typmod(Oid typeId);
 
 Datum
 pg_oid_map(PG_FUNCTION_ARGS)
@@ -50,104 +53,119 @@ pg_procname_map(PG_FUNCTION_ARGS)
 	PG_RETURN_ARRAYTYPE_P(result);
 }
 
-AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array)
+static AnyArrayType *
+anyarray_map(Oid procId, AnyArrayType *array)
 {
 	FmgrInfo				funcinfo;
 	FunctionCallInfoData	locfcinfo;
 	ArrayMapState		   *amstate;
-	HeapTuple				htup;
+	Oid						elemtype = AARR_ELEMTYPE(array);
+	Oid						argtype = get_proc_arg_oid(procId);
 
-/*
-
-    oidvector				oidArray;
-	Oid						arg = 100;
-
-	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
-	if (HeapTupleIsValid(htup))
+	if (elemtype != argtype)
 	{
-		Form_pg_proc proctup = (Form_pg_proc) GETSTRUCT(htup);
-		oidArray.values[0] = proctup->proargtypes.values[0];
-		arg = oidArray.values[0];
+		AnyArrayType *newarray = anyarray_map(get_cast_proc(elemtype,
+															argtype),
+											  array);
+		pfree(array);
+		array = newarray;
 	}
-	ReleaseSysCache(htup);
 
-//	array = cast_array(procId, array);
-	if (AARR_ELEMTYPE(array) != arg)
-		ereport(ERROR,
-			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				errmsg("invalid oid , %d, %d", AARR_ELEMTYPE(array), arg)));
-*/
 	fmgr_info(procId, &funcinfo);
 	amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
 
 	InitFunctionCallInfoData(locfcinfo, &funcinfo, 3,
 							 InvalidOid, NULL, NULL);
 
-	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
-	if (HeapTupleIsValid(htup))
-	{
-		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(htup);
-		locfcinfo.arg[1] = Int32GetDatum(PointerGetDatum(typtup->typtypmod));
-	}
-	ReleaseSysCache(htup);
-
 	locfcinfo.arg[0] = PointerGetDatum(array);
+	locfcinfo.arg[1] = get_typmod(elemtype);
 	locfcinfo.arg[2] = BoolGetDatum(0);
 	locfcinfo.argnull[0] = false;
 	locfcinfo.argnull[1] = false;
 	locfcinfo.argnull[2] = false;
 
-	return DatumGetAnyArray(array_map(&locfcinfo, get_func_rettype(procId), amstate));
+	return DatumGetAnyArray(array_map(&locfcinfo,
+									  get_func_rettype(procId),
+									  amstate));
 }
 
-AnyArrayType *cast_array(Oid procId, AnyArrayType *array)
+static Oid
+get_cast_proc(Oid src, Oid dst)
 {
-	Oid						castsrc;
-	Oid						casttrg;
-	Oid						castfc;
-	Relation				cast_heap;
-	HeapScanDesc			heapScan;
-	Datum					values[Natts_pg_cast];
-	bool					nulls[Natts_pg_cast];
-	HeapTuple				tuple;
-	AnyArrayType		   *result;
-	bool					verification;
-	HeapTuple				htup;
-	Oid						arg = 0;
+	Relation		cast_heap;
+	HeapScanDesc	heapScan;
+	Datum			value;
+	bool			isnull = true;
+	HeapTuple		tuple;
+	ScanKeyData		keys[2];
 
-	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(AARR_ELEMTYPE(array)));
+	ScanKeyInit(&keys[0],
+				Anum_pg_cast_castsource,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(src));
+
+	ScanKeyInit(&keys[1],
+				Anum_pg_cast_casttarget,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(dst));
+
+	cast_heap = heap_open(CastRelationId, AccessShareLock);
+	heapScan = heap_beginscan(cast_heap, SnapshotSelf, 2, keys);
+
+	tuple = heap_getnext(heapScan, ForwardScanDirection);
+	if (HeapTupleIsValid(tuple))
+	{
+		value = heap_getattr(tuple, Anum_pg_cast_castfunc,
+							 RelationGetDescr(cast_heap), &isnull);
+	}
+
+	heap_endscan(heapScan);
+	heap_close(cast_heap, AccessShareLock);
+
+	if (!isnull)
+		return DatumGetObjectId(value);
+	else
+		elog(ERROR, "cast from %d to %d not found", src, dst);
+}
+
+static Oid
+get_proc_arg_oid(Oid procId)
+{
+	HeapTuple	htup;
+	Oid			arg = InvalidOid;
+
+	htup = SearchSysCache1(PROCOID, ObjectIdGetDatum(procId));
 	if (HeapTupleIsValid(htup))
 	{
 		Form_pg_proc proctup = (Form_pg_proc) GETSTRUCT(htup);
-		arg = ObjectIdGetDatum(ObjectIdGetDatum(proctup->proargtypes.values[0]));
+		arg = proctup->proargtypes.values[0];
 	}
 	ReleaseSysCache(htup);
 
-	result = (AnyArrayType *) palloc(sizeof(AnyArrayType));
-	if (AARR_ELEMTYPE(array) != arg)
+	if (arg == InvalidOid)
+		elog(ERROR, "proc %d not found", procId);
+
+	return arg;
+}
+
+static int32
+get_typmod(Oid typeId)
+{
+	HeapTuple	htup;
+	int32		typmod = 0;
+
+	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
+	if (HeapTupleIsValid(htup))
 	{
-		verification = true;
-		cast_heap = heap_open(CastRelationId, AccessShareLock);
-		heapScan = heap_beginscan(cast_heap, SnapshotSelf, 0, (ScanKey) NULL);
-
-		while(HeapTupleIsValid(tuple = heap_getnext(heapScan, ForwardScanDirection)) && verification)
-		{
-			heap_deform_tuple(tuple, cast_heap->rd_att, values, nulls);
-			castsrc = DatumGetObjectId(values[0]);
-			if (castsrc == AARR_ELEMTYPE(array))
-			{
-				casttrg = DatumGetObjectId(values[1]);
-				castfc = DatumGetObjectId(values[2]);
-				if ((casttrg == arg) || (castfc != 0))
-				{
-					result = anyarray_map(castfc, array);
-					verification = false;
-				}
-			}
-		}
-
-		heap_endscan(heapScan);
-		heap_close(cast_heap, AccessShareLock);
+		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(htup);
+		typmod = Int32GetDatum(PointerGetDatum(typtup->typtypmod));
+		ReleaseSysCache(htup);
 	}
-	return result;
+	else
+	{
+		ReleaseSysCache(htup);
+		elog(ERROR, "type %d not found", typeId);
+	}
+
+	return typmod;
 }
