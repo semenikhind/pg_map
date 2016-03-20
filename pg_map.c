@@ -60,10 +60,6 @@ pg_procname_map(PG_FUNCTION_ARGS)
 	{
 		procId = DatumGetObjectId(FunctionCall1(&finfo,
 												PointerGetDatum(pro_name)));
-		Assert(procId != InvalidOid);
-		result = anyarray_map(procId, array, 1);
-
-		PG_RETURN_ARRAYTYPE_P(result);
 	}
 	PG_CATCH();
 	{
@@ -74,6 +70,11 @@ pg_procname_map(PG_FUNCTION_ARGS)
 			 text_to_cstring(pro_name));
 	}
 	PG_END_TRY();
+	
+	Assert(procId != InvalidOid);
+	result = anyarray_map(procId, array, 1);
+
+	PG_RETURN_ARRAYTYPE_P(result);
 }
 
 static AnyArrayType *
