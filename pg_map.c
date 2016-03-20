@@ -21,9 +21,10 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(pg_oid_map);
 PG_FUNCTION_INFO_V1(pg_procname_map);
 
-static AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array);
+static AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array, int reclimit);
 static Oid get_cast_proc(Oid src, Oid dst);
 static Oid get_proc_arg_oid(Oid procId);
+static bool contains(text *str, text *s);
 
 Datum
 pg_oid_map(PG_FUNCTION_ARGS)
@@ -32,7 +33,7 @@ pg_oid_map(PG_FUNCTION_ARGS)
 	AnyArrayType   *array = PG_GETARG_ANY_ARRAY(1);
 	AnyArrayType   *result;
 
-	result = anyarray_map(procId, array);
+	result = anyarray_map(procId, array, 1);
 
 	PG_RETURN_ARRAYTYPE_P(result);
 }
@@ -40,20 +41,43 @@ pg_oid_map(PG_FUNCTION_ARGS)
 Datum
 pg_procname_map(PG_FUNCTION_ARGS)
 {
+	MemoryContext	oldcontext = CurrentMemoryContext;
 	text		   *pro_name = PG_GETARG_TEXT_PP(0);
 	AnyArrayType   *array = PG_GETARG_ANY_ARRAY(1);
-	Oid 			procId;
+	Oid 			procId = InvalidOid;
 	AnyArrayType   *result;
+	FmgrInfo		finfo;
 
-	procId = DatumGetObjectId(DirectFunctionCall1(to_regprocedure,
-												  PointerGetDatum(pro_name)));
-	result = anyarray_map(procId, array);
+	if (contains(pro_name, cstring_to_text("(")) ||
+		contains(pro_name, cstring_to_text(")")))
+	{
+		fmgr_info(F_TO_REGPROCEDURE, &finfo);
+	}
+	else
+		fmgr_info(F_TO_REGPROC, &finfo);
 
-	PG_RETURN_ARRAYTYPE_P(result);
+	PG_TRY();
+	{
+		procId = DatumGetObjectId(FunctionCall1(&finfo,
+												PointerGetDatum(pro_name)));
+		Assert(procId != InvalidOid);
+		result = anyarray_map(procId, array, 1);
+
+		PG_RETURN_ARRAYTYPE_P(result);
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(oldcontext);
+
+		elog(ERROR,
+			 "can't find function \"%s\"",
+			 text_to_cstring(pro_name));
+	}
+	PG_END_TRY();
 }
 
 static AnyArrayType *
-anyarray_map(Oid procId, AnyArrayType *array)
+anyarray_map(Oid procId, AnyArrayType *array, int reclimit)
 {
 	FmgrInfo				funcinfo;
 	FunctionCallInfoData	locfcinfo;
@@ -61,11 +85,15 @@ anyarray_map(Oid procId, AnyArrayType *array)
 	Oid						elemtype = AARR_ELEMTYPE(array);
 	Oid						argtype = get_proc_arg_oid(procId);
 
+	if (reclimit < 0)
+		elog(ERROR, "unlimited recursion");
+
 	if (elemtype != argtype)
 	{
 		AnyArrayType *newarray = anyarray_map(get_cast_proc(elemtype,
 															argtype),
-											  array);
+											  array,
+											  reclimit - 1);
 		pfree(array);
 		array = newarray;
 	}
@@ -146,4 +174,16 @@ get_proc_arg_oid(Oid procId)
 		elog(ERROR, "can't get argument type");
 
 	return arg;
+}
+
+static bool
+contains(text *str, text *s)
+{
+	Datum result;
+
+	result = DirectFunctionCall2(textpos,
+								 PointerGetDatum(str),
+								 PointerGetDatum(s));
+
+	return DatumGetInt32(result) != 0;
 }
