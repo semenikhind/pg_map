@@ -24,7 +24,6 @@ PG_FUNCTION_INFO_V1(pg_procname_map);
 static AnyArrayType *anyarray_map(Oid procId, AnyArrayType *array);
 static Oid get_cast_proc(Oid src, Oid dst);
 static Oid get_proc_arg_oid(Oid procId);
-static int32 get_typmod(Oid typeId);
 
 Datum
 pg_oid_map(PG_FUNCTION_ARGS)
@@ -74,15 +73,11 @@ anyarray_map(Oid procId, AnyArrayType *array)
 	fmgr_info(procId, &funcinfo);
 	amstate = (ArrayMapState *) palloc0(sizeof(ArrayMapState));
 
-	InitFunctionCallInfoData(locfcinfo, &funcinfo, 3,
+	InitFunctionCallInfoData(locfcinfo, &funcinfo, 1,
 							 InvalidOid, NULL, NULL);
 
 	locfcinfo.arg[0] = PointerGetDatum(array);
-	locfcinfo.arg[1] = get_typmod(elemtype);
-	locfcinfo.arg[2] = BoolGetDatum(0);
 	locfcinfo.argnull[0] = false;
-	locfcinfo.argnull[1] = false;
-	locfcinfo.argnull[2] = false;
 
 	return DatumGetAnyArray(array_map(&locfcinfo,
 									  get_func_rettype(procId),
@@ -151,23 +146,4 @@ get_proc_arg_oid(Oid procId)
 		elog(ERROR, "can't get argument type");
 
 	return arg;
-}
-
-static int32
-get_typmod(Oid typeId)
-{
-	HeapTuple	htup;
-	int32		typmod = 0;
-
-	htup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
-	if (HeapTupleIsValid(htup))
-	{
-		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(htup);
-		typmod = Int32GetDatum(PointerGetDatum(typtup->typtypmod));
-		ReleaseSysCache(htup);
-	}
-	else
-		elog(ERROR, "type %d not found", typeId);
-
-	return typmod;
 }
