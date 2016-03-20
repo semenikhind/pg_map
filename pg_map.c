@@ -94,8 +94,7 @@ get_cast_proc(Oid src, Oid dst)
 {
 	Relation		cast_heap;
 	HeapScanDesc	heapScan;
-	Datum			value;
-	bool			isnull = true;
+	Oid				castproc = InvalidOid;
 	HeapTuple		tuple;
 	ScanKeyData		keys[2];
 
@@ -115,15 +114,19 @@ get_cast_proc(Oid src, Oid dst)
 	tuple = heap_getnext(heapScan, ForwardScanDirection);
 	if (HeapTupleIsValid(tuple))
 	{
+		Datum	value;
+		bool	isnull = true;
+
 		value = heap_getattr(tuple, Anum_pg_cast_castfunc,
 							 RelationGetDescr(cast_heap), &isnull);
+		castproc = DatumGetObjectId(value);
 	}
 
 	heap_endscan(heapScan);
 	heap_close(cast_heap, AccessShareLock);
 
-	if (!isnull)
-		return DatumGetObjectId(value);
+	if (castproc != InvalidOid)
+		return castproc;
 	else
 		elog(ERROR, "cast from %d to %d not found", src, dst);
 }
@@ -138,12 +141,14 @@ get_proc_arg_oid(Oid procId)
 	if (HeapTupleIsValid(htup))
 	{
 		Form_pg_proc proctup = (Form_pg_proc) GETSTRUCT(htup);
-		arg = proctup->proargtypes.values[0];
+		if (proctup->proargtypes.dim1 > 0)
+			arg = proctup->proargtypes.values[0];
+
+		ReleaseSysCache(htup);
 	}
-	ReleaseSysCache(htup);
 
 	if (arg == InvalidOid)
-		elog(ERROR, "proc %d not found", procId);
+		elog(ERROR, "can't get argument type");
 
 	return arg;
 }
@@ -162,10 +167,7 @@ get_typmod(Oid typeId)
 		ReleaseSysCache(htup);
 	}
 	else
-	{
-		ReleaseSysCache(htup);
 		elog(ERROR, "type %d not found", typeId);
-	}
 
 	return typmod;
 }
